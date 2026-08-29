@@ -387,9 +387,9 @@ export function useFirebaseChat(
 
   const resetUsers = useCallback(async (): Promise<number> => {
     const b = backendRef.current;
-    const me = profileRef.current.phone;
     if (!b) return 0;
-    const victims = allUsersRef.current.filter((u) => u.phone !== me);
+    // полный сброс: стираем ВСЕ номера, включая аккаунт креатора
+    const victims = [...allUsersRef.current];
     await Promise.all(
       victims.map((u) => deleteDoc(doc(b.db, "users", u.phone)).catch((e) => console.error(e)))
     );

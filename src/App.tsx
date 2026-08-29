@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatBackend, FirebaseConfig, Profile, ThemeName } from "./types";
 import { useDemoChat } from "./lib/demoBackend";
 import { useFirebaseChat } from "./lib/firebaseBackend";
@@ -63,6 +63,21 @@ function MessengerShell({
     if (backend.error) toast(backend.error, "error");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backend.error]);
+
+  /* если аккаунт удалили (например, полный сброс номеров) — вежливо разлогиниваем */
+  const meDocSeenRef = useRef(false);
+  useEffect(() => {
+    if (backend.mode !== "firebase") return;
+    if (backend.meDoc) {
+      meDocSeenRef.current = true;
+      return;
+    }
+    if (meDocSeenRef.current && !backend.connecting) {
+      meDocSeenRef.current = false;
+      toast("Ваш аккаунт удалён полным сбросом — зарегистрируйтесь заново", "info");
+      onDisconnect();
+    }
+  }, [backend.meDoc, backend.connecting, backend.mode, onDisconnect, toast]);
 
   /* живой документ аккаунта синхронизируем с сессией */
   useEffect(() => {

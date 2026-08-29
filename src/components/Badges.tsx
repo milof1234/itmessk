@@ -67,7 +67,7 @@ export function RoleBadges({
           <CrownIcon size={size + 1} />
         </span>
       )}
-      {role === "admin" && (
+      {(role === "admin" || role === "creator") && (
         <span
           className="hammer-badge relative inline-flex cursor-help text-coral-500"
           title="Админ — наведи: молоток бьёт по полу"

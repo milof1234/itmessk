@@ -99,7 +99,9 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
       if (authTab === "register") {
         doc = await registerUser(tempApp, digits, nameTrim, username.trim(), hue, password, CREATOR_PHONE);
         toast(
-          doc.role === "creator" ? "Аккаунт креатора создан — корона ваша" : "Аккаунт создан — добро пожаловать",
+          doc.role === "creator"
+            ? "Аккаунт креатора создан — корона и админка ваши"
+            : "Аккаунт создан — добро пожаловать",
           "info"
         );
       } else {
