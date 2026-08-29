@@ -174,6 +174,8 @@ export function useFirebaseChat(
           unsubMe = onSnapshot(doc(db, "users", profile.phone), (snap) => {
             if (snap.exists()) {
               setMeDoc(mapUser(snap.id, snap.data() as Record<string, unknown>));
+            } else {
+              setMeDoc(null);
             }
           });
           unsubUsers = onSnapshot(
