@@ -5,7 +5,10 @@ import type {
   Message,
   Presence,
   Profile,
+  Role,
   Room,
+  ThemeName,
+  UserDoc,
 } from "../types";
 import { hashHue, synthVoiceWav, uid } from "./media";
 
@@ -275,6 +278,80 @@ export function useDemoChat(profile: Profile): ChatBackend {
     /* в демо печатает только бот */
   }, []);
 
+  const createGroup = useCallback(
+    async (name: string, _members: string[]) => {
+      const id = "group-" + uid();
+      const room: Room = {
+        id,
+        name,
+        type: "group",
+        hue: hashHue(name),
+        lastActivity: Date.now(),
+        lastPreview: "группа создана",
+        createdBy: profileRef.current.name,
+        members: [profileRef.current.uid],
+      };
+      storeRef.current.set(id, []);
+      setRooms((cur) => [room, ...cur]);
+      pushMessage(id, {
+        id: uid(),
+        roomId: id,
+        senderId: "system",
+        senderName: "система",
+        senderHue: 0,
+        kind: "system",
+        text: `Группа «${name}» создана`,
+        createdAt: Date.now(),
+      });
+      botSay(id, { kind: "text", text: `Заглянул в группу «${name}». Я тут.` }, 1400);
+      setActiveRoomId(id);
+      setMessages([...(storeRef.current.get(id) ?? [])]);
+      return id;
+    },
+    [botSay, pushMessage]
+  );
+
+  /* демо-заглушки аккаунтов и модерации */
+  const demoUsers: UserDoc[] = [
+    {
+      phone: "79000000001",
+      username: "demo_nastya",
+      name: "Настя",
+      hue: 320,
+      role: "user",
+      verified: true,
+      createdAt: Date.now() - 86400_000,
+    },
+    {
+      phone: "79000000002",
+      username: "demo_max",
+      name: "Макс",
+      hue: 204,
+      role: "admin",
+      verified: false,
+      createdAt: Date.now() - 43200_000,
+    },
+  ];
+
+  const updateMyProfile = useCallback(async (_p: { name?: string; username?: string; hue?: number; theme?: ThemeName }) => {
+    /* в демо профиль меняется только локально */
+  }, []);
+  const setRole = useCallback(async (_p: string, _r: Role) => {}, []);
+  const setVerified = useCallback(async (_p: string, _v: boolean) => {}, []);
+  const muteUser = useCallback(async (_p: string, _u: number | null) => {}, []);
+  const resetUsers = useCallback(async () => 0, []);
+  const searchUsers = useCallback(async (q: string) => {
+    const s = q.trim().toLowerCase();
+    if (!s) return [];
+    const digits = s.replace(/\D/g, "");
+    return demoUsers.filter(
+      (u) =>
+        (digits.length >= 3 && u.phone.includes(digits)) ||
+        u.username.includes(s.replace(/^@/, "")) ||
+        u.name.toLowerCase().includes(s)
+    );
+  }, []);
+
   const presence: Presence[] = [
     {
       uid: profile.uid,
@@ -302,10 +379,19 @@ export function useDemoChat(profile: Profile): ChatBackend {
     activeRoomId,
     messages,
     presence,
+    meDoc: null,
+    allUsers: demoUsers,
     selectRoom,
     createRoom,
+    createGroup,
     sendText,
     sendMedia,
     setTyping,
+    updateMyProfile,
+    setRole,
+    setVerified,
+    muteUser,
+    resetUsers,
+    searchUsers,
   };
 }

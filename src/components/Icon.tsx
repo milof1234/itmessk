@@ -28,7 +28,9 @@ export type IconName =
   | "bolt"
   | "shield"
   | "eye"
-  | "eye-off";
+  | "eye-off"
+  | "search"
+  | "settings";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   logo: (
@@ -123,6 +125,18 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M4 4l16 16" />
       <path d="M9.9 5.9A9.4 9.4 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17.6 17.6 0 0 1-3.3 4M6 6.7A16.7 16.7 0 0 0 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.4 4.1-1" />
       <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 5 5" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" />
     </>
   ),
 };

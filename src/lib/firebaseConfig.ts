@@ -9,3 +9,6 @@ export const DEFAULT_CONFIG: FirebaseConfig = {
   messagingSenderId: "403872058822",
   appId: "1:403872058822:web:7164253bddea8f175876c7",
 };
+
+/** Номер создателя — корона и панель креатора */
+export const CREATOR_PHONE = "79254699801";

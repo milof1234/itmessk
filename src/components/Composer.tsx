@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useRecorder, MAX_RECORD_SECONDS } from "../hooks/useRecorder";
-import { formatDuration } from "../lib/media";
+import { formatDuration, formatClock } from "../lib/media";
 import type { MediaMeta } from "../types";
 import { Icon } from "./Icon";
 
@@ -11,12 +11,13 @@ interface Props {
   onTyping: (typing: boolean) => void;
   toast: (msg: string, type?: "info" | "error") => void;
   disabled?: boolean;
+  mutedUntil?: number;
 }
 
 const MAX_IMAGE_MB = 15;
 const MAX_VIDEO_MB = 80;
 
-export function Composer({ onSendText, onVoice, onFile, onTyping, toast, disabled }: Props) {
+export function Composer({ onSendText, onVoice, onFile, onTyping, toast, disabled, mutedUntil }: Props) {
   const [text, setText] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -87,6 +88,29 @@ export function Composer({ onSendText, onVoice, onFile, onTyping, toast, disable
   };
 
   const levels = recorder.levels.slice(-38);
+
+  /* ---------- мут от модератора ---------- */
+  const muted = mutedUntil != null && mutedUntil > Date.now();
+  const [, tick] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => {
+    if (!muted) return;
+    const t = window.setInterval(tick, 15000);
+    return () => window.clearInterval(t);
+  }, [muted]);
+
+  if (muted && mutedUntil) {
+    return (
+      <div className="border-t border-coral-500/30 bg-ink-850/85 px-4 py-4 backdrop-blur-md">
+        <div className="anim-msg-in flex items-center justify-center gap-2.5 rounded-xl border border-coral-500/40 bg-coral-500/10 px-4 py-3 text-center text-sm font-medium text-coral-500">
+          <Icon name="mic" size={17} className="shrink-0" />
+          <span>
+            Вы в муте до {formatClock(mutedUntil)} — модератор приглушил вашу волну.
+            {mutedUntil - Date.now() < 60000 && " Скоро вернёте голос."}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-ink-600/60 bg-ink-850/85 px-3 py-3 backdrop-blur-md sm:px-4">

@@ -2,16 +2,18 @@ import { useState } from "react";
 import { deleteApp, initializeApp } from "firebase/app";
 import type { FirebaseConfig, Profile } from "../types";
 import { HUE_SWATCHES, avatarGradient, hashHue, uid } from "../lib/media";
-import { DEFAULT_CONFIG } from "../lib/firebaseConfig";
+import { DEFAULT_CONFIG, CREATOR_PHONE } from "../lib/firebaseConfig";
 import {
   formatPhoneInput,
   isValidPhone,
   loginUser,
   normalizePhone,
   registerUser,
+  USERNAME_RE,
 } from "../lib/auth";
 import { Icon } from "./Icon";
 import { WaveBars } from "./Ambient";
+import { CrownIcon } from "./Badges";
 
 interface Props {
   onEnter: (profile: Profile, mode: "demo" | "firebase", config?: FirebaseConfig) => void;
@@ -42,27 +44,29 @@ service firebase.storage {
 }`;
 
 const STEPS = [
-  "console.firebase.google.com → «Создать проект» (Analytics можно выключить).",
-  "Build → Firestore Database → «Создать базу» → тестовый режим.",
+  "console.firebase.google.com → ваш проект (pulsik-d2ff9 уже подключён).",
+  "Build → Firestore Database → база создана, тестовый режим.",
   "Build → Storage → «Начать» → тестовый режим.",
-  "Настройки проекта → «Ваши приложения» → Web → скопировать firebaseConfig.",
-  "Регистрация по номеру работает через коллекцию users — СМС не нужен.",
+  "Регистрация по номеру идёт через коллекцию users — СМС не нужен.",
+  "Один номер = один аккаунт. Юзернеймы уникальны, ники могут совпадать.",
 ];
 
 export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast }: Props) {
   const [name, setName] = useState(savedName || `Абонент ${Math.floor(100 + Math.random() * 900)}`);
+  const [username, setUsername] = useState("");
   const [hue, setHue] = useState(() => hashHue(savedName || uid()));
   const [mode, setMode] = useState<"demo" | "firebase">(initialMode);
   const [cfg, setCfg] = useState<FirebaseConfig>(savedConfig ?? DEFAULT_CONFIG);
   const [showSteps, setShowSteps] = useState(false);
 
-  // --- аккаунт ---
   const [authTab, setAuthTab] = useState<"login" | "register">("register");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [authErr, setAuthErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const isCreatorPhone = normalizePhone(phone) === CREATOR_PHONE;
 
   const enterDemo = () => {
     const trimmed = name.trim().slice(0, 20) || "Гость эфира";
@@ -72,31 +76,47 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
   const enterFirebase = async () => {
     const digits = normalizePhone(phone);
     if (!isValidPhone(digits)) {
-      setAuthErr("Введите номер полностью, например +7 999 123-45-67");
+      setAuthErr("Введите номер полностью, например +7 925 469-98-01");
       return;
     }
     if (password.length < 4) {
       setAuthErr("Пароль — минимум 4 символа");
       return;
     }
+    if (authTab === "register") {
+      const uname = username.trim().toLowerCase();
+      if (!USERNAME_RE.test(uname)) {
+        setAuthErr("Юзернейм: 3–16 символов, латиница, цифры, «_» и «.»");
+        return;
+      }
+    }
     setAuthErr(null);
     setBusy(true);
     const tempApp = initializeApp(cfg, "efir-auth-" + Date.now());
     try {
       const nameTrim = name.trim().slice(0, 20) || "Абонент";
-      let finalName = nameTrim;
-      let finalHue = hue;
+      let doc;
       if (authTab === "register") {
-        await registerUser(tempApp, digits, nameTrim, hue, password);
-        toast("Аккаунт создан — добро пожаловать в эфир", "info");
+        doc = await registerUser(tempApp, digits, nameTrim, username.trim(), hue, password, CREATOR_PHONE);
+        toast(
+          doc.role === "creator" ? "Аккаунт креатора создан — корона ваша" : "Аккаунт создан — добро пожаловать",
+          "info"
+        );
       } else {
-        const u = await loginUser(tempApp, digits, password, nameTrim, hue);
-        finalName = u.name;
-        finalHue = u.hue;
-        toast(`С возвращением, ${u.name}!`, "info");
+        doc = await loginUser(tempApp, digits, password, CREATOR_PHONE, nameTrim, hue);
+        toast(`С возвращением, ${doc.name}!`, "info");
       }
       onEnter(
-        { uid: "u" + digits, name: finalName, hue: finalHue, phone: digits },
+        {
+          uid: "u" + digits,
+          phone: digits,
+          name: doc.name,
+          username: doc.username,
+          hue: doc.hue,
+          role: doc.role,
+          verified: doc.verified,
+          mutedUntil: doc.mutedUntil,
+        },
         "firebase",
         cfg
       );
@@ -130,19 +150,19 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
         </div>
 
         <p className="max-w-lg text-lg leading-relaxed text-ink-100">
-          Мессенджер, где сообщения летят в реальном времени:
+          Мессенджер на <span className="font-semibold text-ink-50">Firebase</span> (тариф Spark, 0 ₽):
           <span className="text-amber-300"> фото</span>,
-          <span className="text-amber-300"> видео</span> и
-          <span className="text-teal-300"> голосовые</span> — прямо с микрофона,
-          через <span className="font-semibold text-ink-50">Firebase</span> на бесплатном тарифе Spark.
+          <span className="text-amber-300"> видео</span>,
+          <span className="text-teal-300"> голосовые</span>, группы и каналы —
+          регистрация по номеру телефона без СМС.
         </p>
 
         <ul className="flex max-w-lg flex-col gap-3">
           {[
             { icon: "mic" as const, color: "#ff5d5d", text: "Голосовые с живой волной — зажал, сказал, отправил" },
-            { icon: "photo" as const, color: "#2fd6b5", text: "Фото сжимаются на лету и улетают в Storage" },
-            { icon: "video" as const, color: "#ffb454", text: "Видео до 80 МБ с прогрессом загрузки" },
-            { icon: "shield" as const, color: "#5ab8ff", text: "Регистрация по номеру телефона — без СМС, только пароль" },
+            { icon: "users" as const, color: "#2fd6b5", text: "Группы для своих и открытые каналы для всех" },
+            { icon: "shield" as const, color: "#5ab8ff", text: "1 номер = 1 аккаунт, пароль хранится как SHA-256 хеш" },
+            { icon: "flame" as const, color: "#ffb454", text: "Корона креатора, молоток админа, галочка верификации" },
           ].map((f, i) => (
             <li
               key={i}
@@ -157,57 +177,27 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
           ))}
         </ul>
 
-        <p className="max-w-lg text-xs leading-relaxed text-ink-400">
-          Ваш проект <span className="font-mono text-ink-200">pulsik-d2ff9</span> уже подключён.
-          Создайте аккаунт по номеру телефона или войдите в существующий —
-          пароль хранится в Firestore только в виде SHA-256 хеша.
+        <p className="flex max-w-lg items-center gap-2 text-xs leading-relaxed text-ink-400">
+          <span className="crown-badge inline-flex shrink-0 text-amber-400">
+            <CrownIcon size={16} />
+          </span>
+          Номер <span className="font-mono text-ink-200">+7 925 469-98-01</span> получает корону
+          креатора и панель управления: админка, муты, галочки, сброс номеров.
         </p>
       </div>
 
       {/* ---------- подключение ---------- */}
-      <div className="anim-rise rounded-2xl border border-ink-600 bg-ink-850/85 p-5 shadow-2xl shadow-black/40 backdrop-blur-md sm:p-7" style={{ animationDelay: "0.15s" }}>
+      <div
+        className="anim-rise rounded-2xl border border-ink-600 bg-ink-850/85 p-5 shadow-2xl backdrop-blur-md sm:p-7"
+        style={{ animationDelay: "0.15s", boxShadow: "0 30px 80px var(--t-shadow)" }}
+      >
         <h2 className="font-display text-base font-semibold tracking-wide text-ink-50">
           Подключение к станции
         </h2>
         <p className="mt-1 text-xs text-ink-300">Представьтесь, войдите по номеру и выберите режим.</p>
 
-        {/* имя + цвет */}
-        <label className="mt-5 block">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Позывной</span>
-          <input
-            value={name}
-            maxLength={20}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Как вас слышать?"
-            className={inputCls}
-          />
-        </label>
-
-        <div className="mt-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Цвет в эфире</span>
-          <div className="mt-2 flex items-center gap-2.5">
-            {HUE_SWATCHES.map((h) => (
-              <button
-                key={h}
-                onClick={() => setHue(h)}
-                className={`h-8 w-8 rounded-full transition-all duration-150 hover:scale-110 ${
-                  hue === h ? "scale-110 ring-2 ring-ink-50 ring-offset-2 ring-offset-ink-850" : ""
-                }`}
-                style={{ background: avatarGradient(h) }}
-                aria-label={`Цвет ${h}`}
-              />
-            ))}
-            <span
-              className="ml-2 grid h-9 w-9 place-items-center rounded-full text-xs font-bold text-white"
-              style={{ background: avatarGradient(hue) }}
-            >
-              {(name.trim() || "?").slice(0, 1).toUpperCase()}
-            </span>
-          </div>
-        </div>
-
         {/* режим */}
-        <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-ink-500 bg-ink-750 p-1">
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-ink-500 bg-ink-750 p-1">
           {(
             [
               { id: "firebase", label: "Firebase", icon: "flame" as const },
@@ -233,13 +223,33 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
 
         {mode === "demo" ? (
           <>
-            <p className="mt-3 rounded-xl border border-teal-400/25 bg-teal-400/8 px-4 py-3 text-xs leading-relaxed text-teal-300">
-              Всё работает локально: каналы, сообщения, запись с микрофона. Бот-смотритель отвечает
-              и присылает голосовые — удобно всё потрогать без аккаунта.
+            <label className="mt-4 block">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Позывной</span>
+              <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} placeholder="Как вас слышать?" className={inputCls} />
+            </label>
+            <div className="mt-4">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Цвет в эфире</span>
+              <div className="mt-2 flex items-center gap-2.5">
+                {HUE_SWATCHES.map((h) => (
+                  <button
+                    key={h}
+                    onClick={() => setHue(h)}
+                    className={`h-8 w-8 rounded-full transition-all duration-150 hover:scale-110 ${
+                      hue === h ? "scale-110 ring-2 ring-ink-50 ring-offset-2 ring-offset-ink-850" : ""
+                    }`}
+                    style={{ background: avatarGradient(h) }}
+                    aria-label={`Цвет ${h}`}
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="mt-4 rounded-xl border border-teal-400/25 bg-teal-400/8 px-4 py-3 text-xs leading-relaxed text-teal-300">
+              Всё работает локально: каналы, группы, запись с микрофона. Бот-смотритель отвечает
+              и присылает голосовые — без аккаунта и без Firebase.
             </p>
             <button
               onClick={enterDemo}
-              className="group mt-6 flex w-full items-center justify-center gap-2.5 rounded-xl bg-teal-400 py-3.5 font-display text-sm font-bold tracking-widest text-ink-950 uppercase shadow-lg shadow-teal-400/25 transition-all duration-200 hover:bg-teal-300 hover:shadow-teal-400/40 active:scale-[0.98]"
+              className="group mt-5 flex w-full items-center justify-center gap-2.5 rounded-xl bg-teal-400 py-3.5 font-display text-sm font-bold tracking-widest text-ink-950 uppercase shadow-lg shadow-teal-400/25 transition-all duration-200 hover:bg-teal-300 hover:shadow-teal-400/40 active:scale-[0.98]"
             >
               В демо-эфир
               <span className="transition-transform duration-200 group-hover:translate-x-1 group-hover:-translate-y-0.5">
@@ -265,9 +275,7 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
                       setAuthErr(null);
                     }}
                     className={`rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
-                      authTab === t.id
-                        ? "bg-ink-600 text-ink-50 shadow-inner"
-                        : "text-ink-300 hover:text-ink-100"
+                      authTab === t.id ? "bg-ink-600 text-ink-50 shadow-inner" : "text-ink-300 hover:text-ink-100"
                     }`}
                   >
                     {t.label}
@@ -275,16 +283,39 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
                 ))}
               </div>
 
+              {authTab === "register" && (
+                <div className="anim-msg-in mt-3 grid gap-3">
+                  <label className="block">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">
+                      Ник <span className="normal-case tracking-normal text-ink-500">(может повторяться)</span>
+                    </span>
+                    <input value={name} maxLength={20} onChange={(e) => setName(e.target.value)} placeholder="Императив" className={inputCls} />
+                  </label>
+                  <label className="block">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">
+                      Юзернейм <span className="text-amber-400">(уникальный)</span>
+                    </span>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 font-mono text-sm text-ink-400">@</span>
+                      <input
+                        value={username}
+                        maxLength={16}
+                        onChange={(e) => setUsername(e.target.value.replace(/[^a-zA-Z0-9_.]/g, "").toLowerCase())}
+                        placeholder="imperativ"
+                        className={`${inputCls} pl-8 font-mono`}
+                      />
+                    </div>
+                  </label>
+                </div>
+              )}
+
               <label className="mt-3 block">
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">
-                  Номер телефона
-                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Номер телефона</span>
                 <div className="relative">
                   <input
                     value={phone}
                     onChange={(e) => setPhone(formatPhoneInput(normalizePhone(e.target.value)))}
-                    onKeyDown={(e) => e.key === "Enter" && void enterFirebase()}
-                    placeholder="+7 999 123-45-67"
+                    placeholder="+7 925 469-98-01"
                     inputMode="tel"
                     autoComplete="tel"
                     className={`${inputCls} pr-10 font-mono`}
@@ -293,6 +324,11 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
                     <Icon name="radio" size={16} />
                   </span>
                 </div>
+                {isCreatorPhone && (
+                  <span className="anim-msg-in mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+                    <CrownIcon size={12} /> Номер креатора — получите корону и панель управления
+                  </span>
+                )}
               </label>
 
               <label className="mt-3 block">
@@ -348,7 +384,8 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
 
               <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-400">
                 <Icon name="shield" size={13} className="mt-0.5 shrink-0 text-teal-300" />
-                Без СМС: аккаунт — это номер + SHA-256 хеш пароля в коллекции users вашего Firestore.
+                Без СМС: аккаунт — это номер + SHA-256 хеш пароля в коллекции users. Ник и юзернейм
+                можно поменять в настройках.
               </p>
             </div>
 
@@ -402,10 +439,6 @@ export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast
                     </label>
                   ))}
                 </div>
-                <p className="text-[11px] leading-relaxed text-ink-400">
-                  Тестовые правила открыты всем — удобно для старта. Для продакшена ограничьте
-                  доступ по <span className="font-mono text-ink-200">request.auth != null</span>.
-                </p>
               </div>
             )}
           </>

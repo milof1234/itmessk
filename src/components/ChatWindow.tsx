@@ -71,7 +71,20 @@ export function ChatWindow({ backend, profile, onBack, toast }: Props) {
     return out;
   }, [messages]);
 
+  /* роль и галочка отправителя (для бейджей у ника) */
+  const senderInfo = (id: string): { role?: "creator" | "admin" | "user"; verified?: boolean } => {
+    if (id === "efir-bot") return { verified: true };
+    const u = backend.allUsers.find((x) => "u" + x.phone === id);
+    return u ? { role: u.role, verified: u.verified } : {};
+  };
+
+  const mutedNow = profile.mutedUntil != null && profile.mutedUntil > Date.now();
+
   const handleText = async (text: string) => {
+    if (mutedNow) {
+      toast("Вы в муте — сообщение не уйдёт", "error");
+      return;
+    }
     try {
       await backend.sendText(text);
     } catch {
@@ -175,7 +188,7 @@ export function ChatWindow({ backend, profile, onBack, toast }: Props) {
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-            <WaveBars size={44} animate />
+            <WaveBars size={44} />
             <div>
               <p className="font-display text-lg font-semibold text-ink-100">Тишина в эфире</p>
               <p className="mt-1 max-w-xs text-sm text-ink-300">

@@ -1,7 +1,8 @@
-import type { Message } from "../types";
+import type { Message, Role } from "../types";
 import { avatarGradient, formatBytes, formatClock } from "../lib/media";
 import { Icon } from "./Icon";
 import { VoicePlayer } from "./VoicePlayer";
+import { RoleBadges } from "./Badges";
 
 interface Props {
   msg: Message;
@@ -9,9 +10,11 @@ interface Props {
   first: boolean; // первое в группе
   last: boolean; // последнее в группе
   onOpenImage: (url: string) => void;
+  senderRole?: Role;
+  senderVerified?: boolean;
 }
 
-export function MessageBubble({ msg, mine, first, last, onOpenImage }: Props) {
+export function MessageBubble({ msg, mine, first, last, onOpenImage, senderRole, senderVerified }: Props) {
   if (msg.kind === "system") {
     return (
       <div className="anim-msg-in my-2 flex justify-center">
@@ -44,11 +47,9 @@ export function MessageBubble({ msg, mine, first, last, onOpenImage }: Props) {
 
       <div className={`flex max-w-[82%] flex-col sm:max-w-[68%] ${mine ? "items-end" : "items-start"}`}>
         {first && !mine && (
-          <span
-            className="mb-1 ml-1 text-xs font-semibold"
-            style={{ color: `hsl(${msg.senderHue} 70% 62%)` }}
-          >
-            {msg.senderName}
+          <span className="mb-1 ml-1 flex items-center gap-1.5 text-xs font-semibold">
+            <span style={{ color: `hsl(${msg.senderHue} 70% 58%)` }}>{msg.senderName}</span>
+            <RoleBadges role={senderRole} verified={senderVerified} size={11} />
           </span>
         )}
 

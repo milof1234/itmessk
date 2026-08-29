@@ -1,32 +1,136 @@
 @import "tailwindcss";
 
-@theme {
+/* ================= темы ================= */
+:root,
+[data-theme="dark"] {
+  --t-ink-950: #070d0b;
+  --t-ink-900: #0b120f;
+  --t-ink-850: #0e1713;
+  --t-ink-800: #101a16;
+  --t-ink-750: #14211c;
+  --t-ink-700: #182720;
+  --t-ink-600: #1e2e27;
+  --t-ink-500: #2a3f36;
+  --t-ink-400: #48604f;
+  --t-ink-300: #71907e;
+  --t-ink-200: #9db8ac;
+  --t-ink-100: #c8dbd2;
+  --t-ink-50: #e9f3ee;
+  --t-teal-400: #2fd6b5;
+  --t-teal-300: #6ee7cd;
+  --t-teal-600: #17977f;
+  --t-amber-400: #ffb454;
+  --t-amber-300: #ffc97e;
+  --t-amber-950: #241503;
+  --t-coral-500: #ff5d5d;
+  --t-sky-400: #5ab8ff;
+  --t-glow-a: rgba(47, 214, 181, 0.16);
+  --t-glow-b: rgba(255, 180, 84, 0.1);
+  --t-wave-a: #2fd6b5;
+  --t-wave-b: #ffb454;
+  --t-noise: 0.05;
+  --t-dot: rgba(113, 144, 126, 0.22);
+  --t-shadow: rgba(0, 0, 0, 0.55);
+  --t-vp-mine: #241503;
+  --t-vp-other: #71907e;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --t-ink-950: #edf1ee;
+  --t-ink-900: #e6ebe7;
+  --t-ink-850: #ffffff;
+  --t-ink-800: #f3f6f3;
+  --t-ink-750: #eaf0ec;
+  --t-ink-700: #dde5df;
+  --t-ink-600: #cdd8d0;
+  --t-ink-500: #b3c2b9;
+  --t-ink-400: #86998e;
+  --t-ink-300: #5f7368;
+  --t-ink-200: #43544a;
+  --t-ink-100: #2b3830;
+  --t-ink-50: #121a15;
+  --t-teal-400: #0c9d82;
+  --t-teal-300: #0a8471;
+  --t-teal-600: #0c9d82;
+  --t-amber-400: #f5a63c;
+  --t-amber-300: #e9a54a;
+  --t-amber-950: #241503;
+  --t-coral-500: #e04848;
+  --t-sky-400: #2079c9;
+  --t-glow-a: rgba(12, 157, 130, 0.13);
+  --t-glow-b: rgba(245, 166, 60, 0.12);
+  --t-wave-a: #0c9d82;
+  --t-wave-b: #f5a63c;
+  --t-noise: 0.035;
+  --t-dot: rgba(95, 115, 104, 0.25);
+  --t-shadow: rgba(31, 45, 38, 0.28);
+  --t-vp-mine: #241503;
+  --t-vp-other: #5f7368;
+  color-scheme: light;
+}
+
+[data-theme="wave"] {
+  --t-ink-950: #030b1a;
+  --t-ink-900: #051226;
+  --t-ink-850: #071a33;
+  --t-ink-800: #0a2040;
+  --t-ink-750: #0d2a52;
+  --t-ink-700: #123564;
+  --t-ink-600: #1b437a;
+  --t-ink-500: #2b5894;
+  --t-ink-400: #4d7bb5;
+  --t-ink-300: #7ba3d0;
+  --t-ink-200: #a9c6e6;
+  --t-ink-100: #d2e4f7;
+  --t-ink-50: #eef6ff;
+  --t-teal-400: #3ad0f0;
+  --t-teal-300: #8ae6fa;
+  --t-teal-600: #15a8cc;
+  --t-amber-400: #ffb454;
+  --t-amber-300: #ffcd85;
+  --t-amber-950: #241503;
+  --t-coral-500: #ff6b6b;
+  --t-sky-400: #6fb9ff;
+  --t-glow-a: rgba(58, 208, 240, 0.18);
+  --t-glow-b: rgba(79, 124, 255, 0.16);
+  --t-wave-a: #3ad0f0;
+  --t-wave-b: #6fb9ff;
+  --t-noise: 0.05;
+  --t-dot: rgba(123, 163, 208, 0.22);
+  --t-shadow: rgba(0, 8, 26, 0.6);
+  --t-vp-mine: #241503;
+  --t-vp-other: #7ba3d0;
+  color-scheme: dark;
+}
+
+@theme inline {
   --font-display: "Unbounded", sans-serif;
   --font-body: "Golos Text", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --color-ink-950: #070d0b;
-  --color-ink-900: #0b120f;
-  --color-ink-850: #0e1713;
-  --color-ink-800: #101a16;
-  --color-ink-750: #14211c;
-  --color-ink-700: #182720;
-  --color-ink-600: #1e2e27;
-  --color-ink-500: #2a3f36;
-  --color-ink-400: #48604f;
-  --color-ink-300: #71907e;
-  --color-ink-200: #9db8ac;
-  --color-ink-100: #c8dbd2;
-  --color-ink-50: #e9f3ee;
+  --color-ink-950: var(--t-ink-950);
+  --color-ink-900: var(--t-ink-900);
+  --color-ink-850: var(--t-ink-850);
+  --color-ink-800: var(--t-ink-800);
+  --color-ink-750: var(--t-ink-750);
+  --color-ink-700: var(--t-ink-700);
+  --color-ink-600: var(--t-ink-600);
+  --color-ink-500: var(--t-ink-500);
+  --color-ink-400: var(--t-ink-400);
+  --color-ink-300: var(--t-ink-300);
+  --color-ink-200: var(--t-ink-200);
+  --color-ink-100: var(--t-ink-100);
+  --color-ink-50: var(--t-ink-50);
 
-  --color-teal-400: #2fd6b5;
-  --color-teal-300: #6ee7cd;
-  --color-teal-600: #17977f;
-  --color-amber-400: #ffb454;
-  --color-amber-300: #ffc97e;
-  --color-amber-950: #241503;
-  --color-coral-500: #ff5d5d;
-  --color-sky-400: #5ab8ff;
+  --color-teal-400: var(--t-teal-400);
+  --color-teal-300: var(--t-teal-300);
+  --color-teal-600: var(--t-teal-600);
+  --color-amber-400: var(--t-amber-400);
+  --color-amber-300: var(--t-amber-300);
+  --color-amber-950: var(--t-amber-950);
+  --color-coral-500: var(--t-coral-500);
+  --color-sky-400: var(--t-sky-400);
 }
 
 html,
@@ -37,15 +141,16 @@ body,
 
 body {
   font-family: var(--font-body);
-  background: var(--color-ink-950);
-  color: var(--color-ink-50);
+  background: var(--t-ink-950);
+  color: var(--t-ink-50);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  transition: background-color 0.35s ease, color 0.35s ease;
 }
 
 ::selection {
-  background: rgba(47, 214, 181, 0.35);
-  color: #eafff7;
+  background: color-mix(in oklab, var(--t-teal-400) 35%, transparent);
+  color: var(--t-ink-50);
 }
 
 /* ---------- scrollbars ---------- */
@@ -54,18 +159,18 @@ body {
   height: 6px;
 }
 .scroll-slim::-webkit-scrollbar-thumb {
-  background: #223429;
+  background: var(--t-ink-600);
   border-radius: 99px;
 }
 .scroll-slim::-webkit-scrollbar-thumb:hover {
-  background: #2fd6b5;
+  background: var(--t-teal-400);
 }
 .scroll-slim::-webkit-scrollbar-track {
   background: transparent;
 }
 .scroll-slim {
   scrollbar-width: thin;
-  scrollbar-color: #223429 transparent;
+  scrollbar-color: var(--t-ink-600) transparent;
 }
 
 /* ---------- keyframes ---------- */
@@ -109,6 +214,32 @@ body {
 }
 .anim-toast {
   animation: toast-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.anim-modal {
+  animation: modal-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.anim-fade {
+  animation: fade-in 0.25s ease both;
 }
 
 @keyframes eq-bar {
@@ -158,10 +289,10 @@ body {
 @keyframes rec-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 93, 93, 0.55);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--t-coral-500) 55%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 12px rgba(255, 93, 93, 0);
+    box-shadow: 0 0 0 12px transparent;
   }
 }
 .anim-rec {
@@ -213,27 +344,82 @@ body {
   animation: ping-soft 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* ---------- корона: сияет при наведении ---------- */
+.crown-badge svg {
+  transition: transform 0.25s ease, filter 0.25s ease;
+}
+.crown-badge:hover svg {
+  transform: scale(1.2) rotate(-8deg);
+  animation: crown-shine 1.1s ease-in-out infinite;
+}
+@keyframes crown-shine {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px var(--t-amber-400)) drop-shadow(0 0 10px var(--t-amber-400));
+  }
+  50% {
+    filter: drop-shadow(0 0 9px var(--t-amber-300)) drop-shadow(0 0 22px var(--t-amber-400));
+  }
+}
+
+/* ---------- молоток админа: бьёт по полу при наведении ---------- */
+.hammer-badge .hammer-ic {
+  transform-origin: 78% 22%;
+  transition: transform 0.2s ease;
+}
+.hammer-badge:hover .hammer-ic {
+  animation: hammer-smash 0.55s ease-in-out both;
+}
+@keyframes hammer-smash {
+  0% {
+    transform: rotate(0deg);
+  }
+  38% {
+    transform: rotate(58deg) translate(1px, 3px);
+  }
+  52% {
+    transform: rotate(52deg) translate(1px, 3px);
+  }
+  78% {
+    transform: rotate(-8deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+.hammer-badge .hammer-spark {
+  opacity: 0;
+}
+.hammer-badge:hover .hammer-spark {
+  animation: spark-pop 0.55s ease-out both;
+}
+@keyframes spark-pop {
+  0%,
+  30% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
 /* ---------- texture & ambience ---------- */
 .noise-overlay {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-image: url("image/svg+xml,%3Csvg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-size: 240px 240px;
+  opacity: var(--t-noise);
 }
 
 .dot-grid {
-  background-image: radial-gradient(rgba(113, 144, 126, 0.22) 1px, transparent 1px);
+  background-image: radial-gradient(var(--t-dot) 1px, transparent 1px);
   background-size: 26px 26px;
   mask-image: radial-gradient(ellipse 90% 80% at 50% 20%, black 30%, transparent 78%);
-}
-
-.bubble-tail-r::after {
-  content: "";
-  position: absolute;
-  right: -7px;
-  bottom: 0;
-  width: 14px;
-  height: 14px;
-  background: inherit;
-  clip-path: path("M0 14 Q0 0 0 0 L0 0 Q10 2 14 14 Z");
 }
 
 input[type="range"].seek {

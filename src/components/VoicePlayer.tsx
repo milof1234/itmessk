@@ -85,7 +85,7 @@ export function VoicePlayer({ url, duration, seed, mine }: Props) {
   );
 
   const progress = dur > 0 ? Math.min(1, cur / dur) : 0;
-  const accent = mine ? "#241503" : "#2fd6b5";
+  const accent = mine ? "var(--t-vp-mine)" : "var(--t-teal-400)";
   const playedCount = Math.round(progress * bars.length);
 
   return (
@@ -95,9 +95,15 @@ export function VoicePlayer({ url, duration, seed, mine }: Props) {
         onClick={toggle}
         className="grid h-10 w-10 shrink-0 place-items-center rounded-full transition-transform duration-150 hover:scale-110 active:scale-95"
         style={{
-          background: mine ? "rgba(36,21,3,0.18)" : "rgba(47,214,181,0.14)",
+          background: mine
+            ? "color-mix(in oklab, var(--t-vp-mine) 16%, transparent)"
+            : "color-mix(in oklab, var(--t-teal-400) 14%, transparent)",
           color: accent,
-          border: `1px solid ${mine ? "rgba(36,21,3,0.25)" : "rgba(47,214,181,0.3)"}`,
+          border: `1px solid ${
+            mine
+              ? "color-mix(in oklab, var(--t-vp-mine) 25%, transparent)"
+              : "color-mix(in oklab, var(--t-teal-400) 30%, transparent)"
+          }`,
         }}
         aria-label={playing ? "Пауза" : "Слушать"}
       >
@@ -116,14 +122,23 @@ export function VoicePlayer({ url, duration, seed, mine }: Props) {
               className="w-[3px] flex-1 rounded-full transition-colors duration-150"
               style={{
                 height: `${Math.round(h * 100)}%`,
-                background: i < playedCount ? accent : mine ? "rgba(36,21,3,0.3)" : "rgba(157,184,172,0.35)",
+                background:
+                  i < playedCount
+                    ? accent
+                    : mine
+                      ? "color-mix(in oklab, var(--t-vp-mine) 30%, transparent)"
+                      : "color-mix(in oklab, var(--t-ink-300) 40%, transparent)",
               }}
             />
           ))}
         </div>
         <div
           className="flex justify-between font-mono text-[11px] leading-none"
-          style={{ color: mine ? "rgba(36,21,3,0.75)" : "#71907e" }}
+          style={{
+            color: mine
+              ? "color-mix(in oklab, var(--t-vp-mine) 72%, transparent)"
+              : "var(--t-vp-other)",
+          }}
         >
           <span>{formatDuration(cur)}</span>
           <span>{dur > 0 ? formatDuration(dur) : "–:––"}</span>

@@ -5,6 +5,7 @@ import { getAuth, signInAnonymously } from "firebase/auth";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getFirestore,
   limit,
@@ -28,9 +29,13 @@ import type {
   Message,
   Presence,
   Profile,
+  Role,
   Room,
+  ThemeName,
+  UserDoc,
 } from "../types";
 import { hashHue, uid as localUid } from "./media";
+import { isUsernameTaken, USERNAME_RE } from "./auth";
 
 interface Backend {
   app: FirebaseApp;
@@ -47,6 +52,22 @@ function mapRoom(id: string, d: Record<string, unknown>): Room {
     lastActivity: Number(d.lastActivity ?? Date.now()),
     lastPreview: d.lastPreview ? String(d.lastPreview) : undefined,
     createdBy: d.createdBy ? String(d.createdBy) : undefined,
+    type: d.type === "group" ? "group" : "channel",
+    members: Array.isArray(d.members) ? (d.members as string[]) : undefined,
+  };
+}
+
+function mapUser(id: string, d: Record<string, unknown>): UserDoc {
+  return {
+    phone: id,
+    username: String(d.username ?? ""),
+    name: String(d.name ?? "Абонент"),
+    hue: Number(d.hue ?? 168),
+    role: (d.role as UserDoc["role"]) ?? "user",
+    verified: Boolean(d.verified),
+    mutedUntil: d.mutedUntil ? Number(d.mutedUntil) : undefined,
+    theme: d.theme as UserDoc["theme"],
+    createdAt: Number(d.createdAt ?? Date.now()),
   };
 }
 
@@ -77,6 +98,8 @@ export function useFirebaseChat(
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [presence, setPresence] = useState<Presence[]>([]);
+  const [meDoc, setMeDoc] = useState<UserDoc | null>(null);
+  const [allUsers, setAllUsers] = useState<UserDoc[]>([]);
 
   const backendRef = useRef<Backend | null>(null);
   const pendingRef = useRef<Map<string, Message>>(new Map());
@@ -99,6 +122,8 @@ export function useFirebaseChat(
   /* ---------- инициализация ---------- */
   useEffect(() => {
     let unsubRooms: (() => void) | null = null;
+    let unsubMe: (() => void) | null = null;
+    let unsubUsers: (() => void) | null = null;
     setConnecting(true);
     setError(null);
 
@@ -121,27 +146,47 @@ export function useFirebaseChat(
         { merge: true }
       ).catch(() => {});
 
-      unsubRooms = onSnapshot(
-        query(collection(db, "rooms"), orderBy("lastActivity", "desc"), limit(50)),
-        (snap) => {
-          const list = snap.docs.map((d) =>
-            mapRoom(d.id, d.data() as Record<string, unknown>)
-          );
-          setRooms(list);
-          setActiveRoomId((cur) => {
-            if (cur && list.some((r) => r.id === cur)) return cur;
-            return list[0]?.id ?? null;
+        unsubRooms = onSnapshot(
+          query(collection(db, "rooms"), orderBy("lastActivity", "desc"), limit(50)),
+          (snap) => {
+            const list = snap.docs.map((d) =>
+              mapRoom(d.id, d.data() as Record<string, unknown>)
+            );
+            setRooms(list);
+            setActiveRoomId((cur) => {
+              if (cur && list.some((r) => r.id === cur)) return cur;
+              const visible = list.find(
+                (r) => r.type !== "group" || r.members?.includes(profile.uid.replace(/^u/, ""))
+              );
+              return visible?.id ?? list[0]?.id ?? null;
+            });
+          },
+          (err) => {
+            console.error(err);
+            setError(
+              "Не удалось прочитать каналы. Проверьте, что Firestore создан и правила разрешают чтение."
+            );
+          }
+        );
+
+        // мой документ (роль, мут, галочка — в реальном времени)
+        if (profile.phone) {
+          unsubMe = onSnapshot(doc(db, "users", profile.phone), (snap) => {
+            if (snap.exists()) {
+              setMeDoc(mapUser(snap.id, snap.data() as Record<string, unknown>));
+            }
           });
-        },
-        (err) => {
-          console.error(err);
-          setError(
-            "Не удалось прочитать каналы. Проверьте, что Firestore создан и правила разрешают чтение."
+          unsubUsers = onSnapshot(
+            query(collection(db, "users"), limit(300)),
+            (snap) => {
+              setAllUsers(
+                snap.docs.map((d) => mapUser(d.id, d.data() as Record<string, unknown>))
+              );
+            },
+            () => {}
           );
         }
-      );
-      setConnecting(false);
-    } catch (e) {
+        setConnecting(false);    } catch (e) {
       console.error(e);
       setConnecting(false);
       setError("Не удалось подключиться к Firebase. Проверьте конфиг проекта.");
@@ -149,11 +194,13 @@ export function useFirebaseChat(
 
     return () => {
       unsubRooms?.();
+      unsubMe?.();
+      unsubUsers?.();
       const appToKill = backendRef.current?.app;
       backendRef.current = null;
       if (appToKill) void deleteApp(appToKill).catch(() => {});
     };
-  }, [config, profile.uid]);
+  }, [config, profile.uid, profile.phone]);
 
   /* ---------- сообщения + присутствие активного канала ---------- */
   useEffect(() => {
@@ -236,6 +283,7 @@ export function useFirebaseChat(
       const p = profileRef.current;
       const ref = await addDoc(collection(b.db, "rooms"), {
         name,
+        type: "channel",
         hue: hashHue(name),
         lastActivity: Date.now(),
         lastPreview: "канал создан",
@@ -257,6 +305,111 @@ export function useFirebaseChat(
       return null;
     }
   }, []);
+
+  /* ---------- группы ---------- */
+  const createGroup = useCallback(
+    async (name: string, members: string[]): Promise<string | null> => {
+      const b = backendRef.current;
+      const me = profileRef.current.phone;
+      if (!b || !me) return null;
+      try {
+        const all = Array.from(new Set([me, ...members]));
+        const ref = await addDoc(collection(b.db, "rooms"), {
+          name,
+          type: "group",
+          hue: hashHue(name),
+          lastActivity: Date.now(),
+          lastPreview: "группа создана",
+          createdBy: profileRef.current.name,
+          members: all,
+        });
+        await addDoc(collection(b.db, "rooms", ref.id, "messages"), {
+          senderId: "system",
+          senderName: "система",
+          senderHue: 0,
+          kind: "system",
+          text: `Группа «${name}» создана — ${all.length} уч.`,
+          createdAt: Date.now(),
+        });
+        setActiveRoomId(ref.id);
+        return ref.id;
+      } catch (e) {
+        console.error(e);
+        setError("Не удалось создать группу (проверьте правила Firestore).");
+        return null;
+      }
+    },
+    []
+  );
+
+  /* ---------- аккаунты и модерация ---------- */
+  const updateMyProfile = useCallback(
+    async (patch: { name?: string; username?: string; hue?: number; theme?: ThemeName }) => {
+      const b = backendRef.current;
+      const me = profileRef.current.phone;
+      if (!b || !me) return;
+      const data: Record<string, unknown> = {};
+      if (patch.name != null) data.name = patch.name.slice(0, 20);
+      if (patch.hue != null) data.hue = patch.hue;
+      if (patch.theme != null) data.theme = patch.theme;
+      if (patch.username != null) {
+        const uname = patch.username.toLowerCase();
+        if (!USERNAME_RE.test(uname)) {
+          throw new Error("Юзернейм: 3–16 символов, латиница, цифры, «_» и «.»");
+        }
+        if (await isUsernameTaken(b.app, uname, me)) {
+          throw new Error(`Юзернейм @${uname} уже занят`);
+        }
+        data.username = uname;
+      }
+      await setDoc(doc(b.db, "users", me), data, { merge: true });
+    },
+    []
+  );
+
+  const setRole = useCallback(async (phone: string, role: Role) => {
+    const b = backendRef.current;
+    if (!b) return;
+    await setDoc(doc(b.db, "users", phone), { role }, { merge: true });
+  }, []);
+
+  const setVerified = useCallback(async (phone: string, v: boolean) => {
+    const b = backendRef.current;
+    if (!b) return;
+    await setDoc(doc(b.db, "users", phone), { verified: v }, { merge: true });
+  }, []);
+
+  const muteUser = useCallback(async (phone: string, until: number | null) => {
+    const b = backendRef.current;
+    if (!b) return;
+    await setDoc(doc(b.db, "users", phone), { mutedUntil: until }, { merge: true });
+  }, []);
+
+  const resetUsers = useCallback(async (): Promise<number> => {
+    const b = backendRef.current;
+    const me = profileRef.current.phone;
+    if (!b) return 0;
+    const victims = allUsersRef.current.filter((u) => u.phone !== me);
+    await Promise.all(
+      victims.map((u) => deleteDoc(doc(b.db, "users", u.phone)).catch((e) => console.error(e)))
+    );
+    return victims.length;
+  }, []);
+
+  const searchUsers = useCallback(async (q: string): Promise<UserDoc[]> => {
+    const s = q.trim().toLowerCase();
+    if (!s) return [];
+    const digits = s.replace(/\D/g, "");
+    return allUsersRef.current.filter((u) => {
+      if (digits.length >= 3 && u.phone.includes(digits)) return true;
+      if (u.username && u.username.includes(s.replace(/^@/, ""))) return true;
+      if (u.name.toLowerCase().includes(s)) return true;
+      return false;
+    });
+  }, []);
+
+  const allUsersRef = useRef<UserDoc[]>([]);
+  allUsersRef.current = allUsers;
 
   const touchRoom = useCallback((roomId: string, preview: string) => {
     const b = backendRef.current;
@@ -415,10 +568,19 @@ export function useFirebaseChat(
     activeRoomId,
     messages,
     presence,
+    meDoc,
+    allUsers,
     selectRoom,
     createRoom,
+    createGroup,
     sendText,
     sendMedia,
     setTyping,
+    updateMyProfile,
+    setRole,
+    setVerified,
+    muteUser,
+    resetUsers,
+    searchUsers,
   };
 }
