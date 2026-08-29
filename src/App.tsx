@@ -7,6 +7,7 @@ import { Onboarding } from "./components/Onboarding";
 import { Sidebar } from "./components/Sidebar";
 import { ChatWindow } from "./components/ChatWindow";
 import { Icon } from "./components/Icon";
+import { DEFAULT_CONFIG } from "./lib/firebaseConfig";
 
 /* ---------------- тосты ---------------- */
 interface Toast {
@@ -100,9 +101,10 @@ interface Session {
   profile: Profile | null;
   mode: "demo" | "firebase";
   config: FirebaseConfig | null;
+  lastProfile?: Profile | null;
 }
 
-const SESSION_KEY = "efir_session_v1";
+const SESSION_KEY = "efir_session_v2";
 
 function loadSession(): Session {
   try {
@@ -112,14 +114,15 @@ function loadSession(): Session {
       if (s && typeof s === "object")
         return {
           profile: s.profile ?? null,
-          mode: s.mode === "firebase" ? "firebase" : "demo",
-          config: s.config ?? null,
+          mode: s.mode === "demo" ? "demo" : "firebase",
+          config: s.config ?? DEFAULT_CONFIG,
+          lastProfile: s.lastProfile ?? null,
         };
     }
   } catch {
     /* повреждённая сессия — начнём заново */
   }
-  return { profile: null, mode: "demo", config: null };
+  return { profile: null, mode: "firebase", config: DEFAULT_CONFIG, lastProfile: null };
 }
 
 export default function App() {
@@ -143,12 +146,12 @@ export default function App() {
   }, []);
 
   const enter = useCallback((profile: Profile, mode: "demo" | "firebase", config?: FirebaseConfig) => {
-    setSession({ profile, mode, config: config ?? null });
+    setSession({ profile, mode, config: config ?? DEFAULT_CONFIG, lastProfile: profile });
     toast(mode === "demo" ? "Демо-эфир открыт. Добро пожаловать!" : "Подключаемся к вашему Firebase…", "info");
   }, [toast]);
 
   const disconnect = useCallback(() => {
-    setSession((s) => ({ ...s, profile: null }));
+    setSession((s) => ({ ...s, profile: null, lastProfile: s.profile }));
     toast("Вы вышли из эфира", "info");
   }, [toast]);
 
@@ -176,8 +179,9 @@ export default function App() {
         <div className="scroll-slim relative z-10 h-full overflow-y-auto">
           <Onboarding
             onEnter={enter}
-            savedName={""}
+            savedName={session.lastProfile?.name ?? ""}
             savedConfig={session.config}
+            initialMode={session.mode}
             toast={toast}
           />
         </div>

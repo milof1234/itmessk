@@ -4,6 +4,7 @@ export interface Profile {
   uid: string;
   name: string;
   hue: number; // 0..360, цвет аватара
+  phone?: string; // цифры номера (логин в Firebase-режиме)
 }
 
 export interface Message {

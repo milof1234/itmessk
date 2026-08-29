@@ -26,7 +26,9 @@ export type IconName =
   | "radio"
   | "flame"
   | "bolt"
-  | "shield";
+  | "shield"
+  | "eye"
+  | "eye-off";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   logo: (
@@ -108,6 +110,19 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M12 3 5 5.8v5.4c0 4.5 2.9 7.7 7 9.3 4.1-1.6 7-4.8 7-9.3V5.8L12 3Z" />
       <path d="m9 11.5 2.2 2.2L15.5 9" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  "eye-off": (
+    <>
+      <path d="M4 4l16 16" />
+      <path d="M9.9 5.9A9.4 9.4 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17.6 17.6 0 0 1-3.3 4M6 6.7A16.7 16.7 0 0 0 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.4 4.1-1" />
+      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
     </>
   ),
 };

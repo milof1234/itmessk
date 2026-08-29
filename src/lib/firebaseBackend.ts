@@ -77,7 +77,6 @@ export function useFirebaseChat(
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [presence, setPresence] = useState<Presence[]>([]);
-  const [myId, setMyId] = useState("");
 
   const backendRef = useRef<Backend | null>(null);
   const pendingRef = useRef<Map<string, Message>>(new Map());
@@ -99,71 +98,62 @@ export function useFirebaseChat(
 
   /* ---------- инициализация ---------- */
   useEffect(() => {
-    let cancelled = false;
     let unsubRooms: (() => void) | null = null;
+    setConnecting(true);
+    setError(null);
 
-    (async () => {
-      try {
-        setConnecting(true);
-        setError(null);
-        const appName = "efir-" + localUid();
-        const app = getApps().some((a) => a.name === appName)
-          ? getApps().find((a) => a.name === appName)!
-          : initializeApp(config, appName);
-        const auth = getAuth(app);
-        const cred = await signInAnonymously(auth);
-        if (cancelled) return;
-        const db = getFirestore(app);
-        const storage = getStorage(app);
-        backendRef.current = { app, db, storage, myUid: cred.user.uid };
-        setMyId(cred.user.uid);
+    try {
+      const appName = "efir-" + localUid();
+      const app = getApps().some((a) => a.name === appName)
+        ? getApps().find((a) => a.name === appName)!
+        : initializeApp(config, appName);
+      const db = getFirestore(app);
+      const storage = getStorage(app);
+      backendRef.current = { app, db, storage, myUid: profile.uid };
 
-        // сидируем общий канал
-        await setDoc(
-          doc(db, "rooms", "general"),
-          { name: "Общий эфир", hue: 168, lastActivity: Date.now() },
-          { merge: true }
-        );
+      // анонимный вход — опционально: пригодится, если в правилах есть request.auth
+      signInAnonymously(getAuth(app)).catch(() => {});
 
-        unsubRooms = onSnapshot(
-          query(collection(db, "rooms"), orderBy("lastActivity", "desc"), limit(50)),
-          (snap) => {
-            const list = snap.docs.map((d) =>
-              mapRoom(d.id, d.data() as Record<string, unknown>)
-            );
-            setRooms(list);
-            setActiveRoomId((cur) => {
-              if (cur && list.some((r) => r.id === cur)) return cur;
-              return list[0]?.id ?? null;
-            });
-          },
-          (err) => {
-            console.error(err);
-            setError(
-              "Не удалось прочитать каналы. Проверьте, что Firestore создан и правила разрешают чтение."
-            );
-          }
-        );
-        setConnecting(false);
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) {
-          setConnecting(false);
+      // сидируем общий канал
+      void setDoc(
+        doc(db, "rooms", "general"),
+        { name: "Общий эфир", hue: 168, lastActivity: Date.now() },
+        { merge: true }
+      ).catch(() => {});
+
+      unsubRooms = onSnapshot(
+        query(collection(db, "rooms"), orderBy("lastActivity", "desc"), limit(50)),
+        (snap) => {
+          const list = snap.docs.map((d) =>
+            mapRoom(d.id, d.data() as Record<string, unknown>)
+          );
+          setRooms(list);
+          setActiveRoomId((cur) => {
+            if (cur && list.some((r) => r.id === cur)) return cur;
+            return list[0]?.id ?? null;
+          });
+        },
+        (err) => {
+          console.error(err);
           setError(
-            "Не удалось подключиться к Firebase. Проверьте конфиг и включённую анонимную аутентификацию."
+            "Не удалось прочитать каналы. Проверьте, что Firestore создан и правила разрешают чтение."
           );
         }
-      }
-    })();
+      );
+      setConnecting(false);
+    } catch (e) {
+      console.error(e);
+      setConnecting(false);
+      setError("Не удалось подключиться к Firebase. Проверьте конфиг проекта.");
+    }
 
     return () => {
-      cancelled = true;
       unsubRooms?.();
       const appToKill = backendRef.current?.app;
       backendRef.current = null;
       if (appToKill) void deleteApp(appToKill).catch(() => {});
     };
-  }, [config]);
+  }, [config, profile.uid]);
 
   /* ---------- сообщения + присутствие активного канала ---------- */
   useEffect(() => {
@@ -418,7 +408,7 @@ export function useFirebaseChat(
 
   return {
     mode: "firebase",
-    mySenderId: myId,
+    mySenderId: profile.uid,
     connecting,
     error,
     rooms,

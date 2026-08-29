@@ -1,6 +1,15 @@
 import { useState } from "react";
+import { deleteApp, initializeApp } from "firebase/app";
 import type { FirebaseConfig, Profile } from "../types";
 import { HUE_SWATCHES, avatarGradient, hashHue, uid } from "../lib/media";
+import { DEFAULT_CONFIG } from "../lib/firebaseConfig";
+import {
+  formatPhoneInput,
+  isValidPhone,
+  loginUser,
+  normalizePhone,
+  registerUser,
+} from "../lib/auth";
 import { Icon } from "./Icon";
 import { WaveBars } from "./Ambient";
 
@@ -8,6 +17,7 @@ interface Props {
   onEnter: (profile: Profile, mode: "demo" | "firebase", config?: FirebaseConfig) => void;
   savedName: string;
   savedConfig: FirebaseConfig | null;
+  initialMode: "demo" | "firebase";
   toast: (msg: string, type?: "info" | "error") => void;
 }
 
@@ -31,66 +41,79 @@ service firebase.storage {
   }
 }`;
 
-const FIELDS: Array<{ key: keyof FirebaseConfig; label: string; required: boolean; placeholder: string }> = [
-  { key: "apiKey", label: "apiKey", required: true, placeholder: "AIzaSy…" },
-  { key: "projectId", label: "projectId", required: true, placeholder: "my-efir-app" },
-  { key: "storageBucket", label: "storageBucket", required: true, placeholder: "my-efir-app.appspot.com" },
-  { key: "appId", label: "appId", required: true, placeholder: "1:123…:web:abc…" },
-  { key: "authDomain", label: "authDomain", required: false, placeholder: "my-efir-app.firebaseapp.com" },
-  { key: "messagingSenderId", label: "messagingSenderId", required: false, placeholder: "1234567890" },
-];
-
 const STEPS = [
-  "console.firebase.google.com → «Создать проект» (любой регион, Analytics можно выключить).",
+  "console.firebase.google.com → «Создать проект» (Analytics можно выключить).",
   "Build → Firestore Database → «Создать базу» → тестовый режим.",
   "Build → Storage → «Начать» → тестовый режим.",
-  "Build → Authentication → «Начать» → вкладка Anonymous → включить.",
-  "Настройки проекта → «Ваши приложения» → добавить Web-приложение и скопировать firebaseConfig.",
+  "Настройки проекта → «Ваши приложения» → Web → скопировать firebaseConfig.",
+  "Регистрация по номеру работает через коллекцию users — СМС не нужен.",
 ];
 
-export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
-  const [name, setName] = useState(savedName || `Гость ${Math.floor(1000 + Math.random() * 9000)}`);
+export function Onboarding({ onEnter, savedName, savedConfig, initialMode, toast }: Props) {
+  const [name, setName] = useState(savedName || `Абонент ${Math.floor(100 + Math.random() * 900)}`);
   const [hue, setHue] = useState(() => hashHue(savedName || uid()));
-  const [mode, setMode] = useState<"demo" | "firebase">(savedConfig ? "firebase" : "demo");
-  const [cfg, setCfg] = useState<FirebaseConfig>(
-    savedConfig ?? {
-      apiKey: "",
-      authDomain: "",
-      projectId: "",
-      storageBucket: "",
-      messagingSenderId: "",
-      appId: "",
-    }
-  );
-  const [showSteps, setShowSteps] = useState(!savedConfig);
-  const [err, setErr] = useState<string | null>(null);
+  const [mode, setMode] = useState<"demo" | "firebase">(initialMode);
+  const [cfg, setCfg] = useState<FirebaseConfig>(savedConfig ?? DEFAULT_CONFIG);
+  const [showSteps, setShowSteps] = useState(false);
 
-  const enter = () => {
+  // --- аккаунт ---
+  const [authTab, setAuthTab] = useState<"login" | "register">("register");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [authErr, setAuthErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const enterDemo = () => {
     const trimmed = name.trim().slice(0, 20) || "Гость эфира";
-    const profile: Profile = { uid: "guest-" + uid(), name: trimmed, hue };
-    if (mode === "demo") {
-      onEnter(profile, "demo");
-      return;
-    }
-    const missing = FIELDS.filter((f) => f.required && !cfg[f.key].trim()).map((f) => f.label);
-    if (missing.length > 0) {
-      setErr(`Заполните поля: ${missing.join(", ")}`);
-      return;
-    }
-    setErr(null);
-    onEnter(profile, "firebase", {
-      apiKey: cfg.apiKey.trim(),
-      authDomain: cfg.authDomain.trim() || `${cfg.projectId.trim()}.firebaseapp.com`,
-      projectId: cfg.projectId.trim(),
-      storageBucket: cfg.storageBucket.trim(),
-      messagingSenderId: cfg.messagingSenderId.trim() || "0",
-      appId: cfg.appId.trim(),
-    });
+    onEnter({ uid: "guest-" + uid(), name: trimmed, hue }, "demo");
   };
+
+  const enterFirebase = async () => {
+    const digits = normalizePhone(phone);
+    if (!isValidPhone(digits)) {
+      setAuthErr("Введите номер полностью, например +7 999 123-45-67");
+      return;
+    }
+    if (password.length < 4) {
+      setAuthErr("Пароль — минимум 4 символа");
+      return;
+    }
+    setAuthErr(null);
+    setBusy(true);
+    const tempApp = initializeApp(cfg, "efir-auth-" + Date.now());
+    try {
+      const nameTrim = name.trim().slice(0, 20) || "Абонент";
+      let finalName = nameTrim;
+      let finalHue = hue;
+      if (authTab === "register") {
+        await registerUser(tempApp, digits, nameTrim, hue, password);
+        toast("Аккаунт создан — добро пожаловать в эфир", "info");
+      } else {
+        const u = await loginUser(tempApp, digits, password, nameTrim, hue);
+        finalName = u.name;
+        finalHue = u.hue;
+        toast(`С возвращением, ${u.name}!`, "info");
+      }
+      onEnter(
+        { uid: "u" + digits, name: finalName, hue: finalHue, phone: digits },
+        "firebase",
+        cfg
+      );
+    } catch (e) {
+      setAuthErr(e instanceof Error ? e.message : "Не удалось связаться с Firebase");
+    } finally {
+      await deleteApp(tempApp).catch(() => {});
+      setBusy(false);
+    }
+  };
+
+  const inputCls =
+    "mt-1.5 w-full rounded-xl border border-ink-500 bg-ink-750 px-4 py-2.5 text-[15px] text-ink-50 outline-none transition-colors placeholder:text-ink-400 focus:border-teal-400/70";
 
   return (
     <div className="relative z-10 mx-auto grid min-h-full w-full max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-12 lg:py-12">
-      {/* ---------- левая часть: манифест ---------- */}
+      {/* ---------- манифест ---------- */}
       <div className="anim-rise flex flex-col gap-7">
         <div className="flex items-center gap-4">
           <span className="grid h-14 w-14 place-items-center rounded-2xl border border-teal-400/30 bg-teal-400/10 shadow-lg shadow-teal-400/10">
@@ -111,7 +134,7 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
           <span className="text-amber-300"> фото</span>,
           <span className="text-amber-300"> видео</span> и
           <span className="text-teal-300"> голосовые</span> — прямо с микрофона,
-          через <span className="font-semibold text-ink-50">Firebase</span> на полностью бесплатном тарифе Spark.
+          через <span className="font-semibold text-ink-50">Firebase</span> на бесплатном тарифе Spark.
         </p>
 
         <ul className="flex max-w-lg flex-col gap-3">
@@ -119,7 +142,7 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
             { icon: "mic" as const, color: "#ff5d5d", text: "Голосовые с живой волной — зажал, сказал, отправил" },
             { icon: "photo" as const, color: "#2fd6b5", text: "Фото сжимаются на лету и улетают в Storage" },
             { icon: "video" as const, color: "#ffb454", text: "Видео до 80 МБ с прогрессом загрузки" },
-            { icon: "bolt" as const, color: "#5ab8ff", text: "Firestore + Storage + анонимный вход — 0 ₽ навсегда" },
+            { icon: "shield" as const, color: "#5ab8ff", text: "Регистрация по номеру телефона — без СМС, только пароль" },
           ].map((f, i) => (
             <li
               key={i}
@@ -135,32 +158,31 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
         </ul>
 
         <p className="max-w-lg text-xs leading-relaxed text-ink-400">
-          Нет проекта Firebase под рукой? Включайте демо-режим — бот-смотритель ответит текстом
-          и даже пришлёт синтезированное голосовое, а всё приложение останется полностью рабочим.
+          Ваш проект <span className="font-mono text-ink-200">pulsik-d2ff9</span> уже подключён.
+          Создайте аккаунт по номеру телефона или войдите в существующий —
+          пароль хранится в Firestore только в виде SHA-256 хеша.
         </p>
       </div>
 
-      {/* ---------- правая часть: подключение ---------- */}
+      {/* ---------- подключение ---------- */}
       <div className="anim-rise rounded-2xl border border-ink-600 bg-ink-850/85 p-5 shadow-2xl shadow-black/40 backdrop-blur-md sm:p-7" style={{ animationDelay: "0.15s" }}>
         <h2 className="font-display text-base font-semibold tracking-wide text-ink-50">
           Подключение к станции
         </h2>
-        <p className="mt-1 text-xs text-ink-300">Представьтесь и выберите режим вещания.</p>
+        <p className="mt-1 text-xs text-ink-300">Представьтесь, войдите по номеру и выберите режим.</p>
 
-        {/* имя */}
+        {/* имя + цвет */}
         <label className="mt-5 block">
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Позывной</span>
           <input
             value={name}
             maxLength={20}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && enter()}
             placeholder="Как вас слышать?"
-            className="mt-1.5 w-full rounded-xl border border-ink-500 bg-ink-750 px-4 py-2.5 text-[15px] text-ink-50 outline-none transition-colors placeholder:text-ink-400 focus:border-teal-400/70"
+            className={inputCls}
           />
         </label>
 
-        {/* цвет */}
         <div className="mt-4">
           <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">Цвет в эфире</span>
           <div className="mt-2 flex items-center gap-2.5">
@@ -188,8 +210,8 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
         <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl border border-ink-500 bg-ink-750 p-1">
           {(
             [
+              { id: "firebase", label: "Firebase", icon: "flame" as const },
               { id: "demo", label: "Демо-режим", icon: "shield" as const },
-              { id: "firebase", label: "Свой Firebase", icon: "flame" as const },
             ] as const
           ).map((m) => (
             <button
@@ -197,9 +219,9 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
               onClick={() => setMode(m.id)}
               className={`flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
                 mode === m.id
-                  ? m.id === "demo"
-                    ? "bg-teal-400 text-ink-950 shadow-md shadow-teal-400/25"
-                    : "bg-amber-400 text-amber-950 shadow-md shadow-amber-400/25"
+                  ? m.id === "firebase"
+                    ? "bg-amber-400 text-amber-950 shadow-md shadow-amber-400/25"
+                    : "bg-teal-400 text-ink-950 shadow-md shadow-teal-400/25"
                   : "text-ink-300 hover:text-ink-100"
               }`}
             >
@@ -210,19 +232,134 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
         </div>
 
         {mode === "demo" ? (
-          <p className="mt-3 rounded-xl border border-teal-400/25 bg-teal-400/8 px-4 py-3 text-xs leading-relaxed text-teal-300">
-            Всё работает локально: каналы, сообщения, запись с микрофона. Бот-смотритель отвечает
-            и присылает голосовые — удобно всё потрогать до подключения Firebase.
-          </p>
+          <>
+            <p className="mt-3 rounded-xl border border-teal-400/25 bg-teal-400/8 px-4 py-3 text-xs leading-relaxed text-teal-300">
+              Всё работает локально: каналы, сообщения, запись с микрофона. Бот-смотритель отвечает
+              и присылает голосовые — удобно всё потрогать без аккаунта.
+            </p>
+            <button
+              onClick={enterDemo}
+              className="group mt-6 flex w-full items-center justify-center gap-2.5 rounded-xl bg-teal-400 py-3.5 font-display text-sm font-bold tracking-widest text-ink-950 uppercase shadow-lg shadow-teal-400/25 transition-all duration-200 hover:bg-teal-300 hover:shadow-teal-400/40 active:scale-[0.98]"
+            >
+              В демо-эфир
+              <span className="transition-transform duration-200 group-hover:translate-x-1 group-hover:-translate-y-0.5">
+                <Icon name="send" size={17} strokeWidth={2.2} />
+              </span>
+            </button>
+          </>
         ) : (
-          <div className="mt-4">
+          <>
+            {/* вход / регистрация */}
+            <div className="mt-4">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-ink-500 bg-ink-750 p-1">
+                {(
+                  [
+                    { id: "register", label: "Регистрация" },
+                    { id: "login", label: "Вход" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setAuthTab(t.id);
+                      setAuthErr(null);
+                    }}
+                    className={`rounded-lg py-2 text-sm font-semibold transition-all duration-200 ${
+                      authTab === t.id
+                        ? "bg-ink-600 text-ink-50 shadow-inner"
+                        : "text-ink-300 hover:text-ink-100"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <label className="mt-3 block">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">
+                  Номер телефона
+                </span>
+                <div className="relative">
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(formatPhoneInput(normalizePhone(e.target.value)))}
+                    onKeyDown={(e) => e.key === "Enter" && void enterFirebase()}
+                    placeholder="+7 999 123-45-67"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className={`${inputCls} pr-10 font-mono`}
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-ink-400">
+                    <Icon name="radio" size={16} />
+                  </span>
+                </div>
+              </label>
+
+              <label className="mt-3 block">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-400">
+                  Пароль {authTab === "register" && <span className="normal-case tracking-normal">(придумайте, без СМС)</span>}
+                </span>
+                <div className="relative">
+                  <input
+                    type={showPass ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && void enterFirebase()}
+                    placeholder={authTab === "register" ? "Минимум 4 символа" : "Ваш пароль"}
+                    autoComplete={authTab === "register" ? "new-password" : "current-password"}
+                    className={`${inputCls} pr-10`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((v) => !v)}
+                    className="absolute top-1/2 right-3 -translate-y-1/2 text-ink-400 transition-colors hover:text-teal-300"
+                    aria-label={showPass ? "Скрыть пароль" : "Показать пароль"}
+                  >
+                    <Icon name={showPass ? "eye-off" : "eye"} size={16} />
+                  </button>
+                </div>
+              </label>
+
+              {authErr && (
+                <p className="anim-msg-in mt-2 flex items-center gap-1.5 text-xs font-medium text-coral-500">
+                  <Icon name="alert" size={13} /> {authErr}
+                </p>
+              )}
+
+              <button
+                onClick={() => void enterFirebase()}
+                disabled={busy}
+                className="group mt-4 flex w-full items-center justify-center gap-2.5 rounded-xl bg-amber-400 py-3.5 font-display text-sm font-bold tracking-widest text-amber-950 uppercase shadow-lg shadow-amber-400/25 transition-all duration-200 hover:bg-amber-300 hover:shadow-amber-400/40 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+              >
+                {busy ? (
+                  <>
+                    <Icon name="logo" size={18} className="anim-spin-slow" />
+                    Настраиваем волну…
+                  </>
+                ) : (
+                  <>
+                    {authTab === "register" ? "Создать аккаунт и выйти в эфир" : "Войти в эфир"}
+                    <span className="transition-transform duration-200 group-hover:translate-x-1 group-hover:-translate-y-0.5">
+                      <Icon name="send" size={17} strokeWidth={2.2} />
+                    </span>
+                  </>
+                )}
+              </button>
+
+              <p className="mt-2.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-ink-400">
+                <Icon name="shield" size={13} className="mt-0.5 shrink-0 text-teal-300" />
+                Без СМС: аккаунт — это номер + SHA-256 хеш пароля в коллекции users вашего Firestore.
+              </p>
+            </div>
+
+            {/* конфиг + инструкция */}
             <button
               onClick={() => setShowSteps((v) => !v)}
-              className="flex w-full items-center justify-between rounded-xl border border-ink-500 bg-ink-750 px-4 py-2.5 text-left text-sm font-semibold text-ink-100 transition-colors hover:border-amber-400/50"
+              className="mt-4 flex w-full items-center justify-between rounded-xl border border-ink-500 bg-ink-750 px-4 py-2.5 text-left text-sm font-semibold text-ink-100 transition-colors hover:border-amber-400/50"
             >
               <span className="flex items-center gap-2">
                 <Icon name="bolt" size={15} className="text-amber-400" />
-                Как поднять проект за 3 минуты
+                Конфиг проекта и правила
               </span>
               <span className={`transition-transform duration-200 ${showSteps ? "rotate-180" : ""}`}>
                 <Icon name="back" size={14} className="-rotate-90" />
@@ -230,7 +367,7 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
             </button>
 
             {showSteps && (
-              <div className="anim-msg-in mt-2 space-y-2 rounded-xl border border-ink-600 bg-ink-800/70 p-4">
+              <div className="anim-msg-in mt-2 space-y-2.5 rounded-xl border border-ink-600 bg-ink-800/70 p-4">
                 <ol className="list-decimal space-y-1.5 pl-4 text-xs leading-relaxed text-ink-200">
                   {STEPS.map((s, i) => (
                     <li key={i}>{s}</li>
@@ -253,46 +390,26 @@ export function Onboarding({ onEnter, savedName, savedConfig, toast }: Props) {
                     <Icon name="copy" size={13} />
                   </button>
                 </div>
+                <div className="grid gap-2">
+                  {(Object.keys(cfg) as Array<keyof FirebaseConfig>).map((k) => (
+                    <label key={k} className="block">
+                      <span className="font-mono text-[10px] uppercase tracking-wider text-ink-400">{k}</span>
+                      <input
+                        value={cfg[k]}
+                        onChange={(e) => setCfg((c) => ({ ...c, [k]: e.target.value }))}
+                        className="mt-0.5 w-full rounded-lg border border-ink-500 bg-ink-750 px-3 py-1.5 font-mono text-[11px] text-ink-50 outline-none transition-colors focus:border-amber-400/70"
+                      />
+                    </label>
+                  ))}
+                </div>
                 <p className="text-[11px] leading-relaxed text-ink-400">
-                  Тестовые правила удобны для старта, но открыты всем. Для продакшена ограничьте
+                  Тестовые правила открыты всем — удобно для старта. Для продакшена ограничьте
                   доступ по <span className="font-mono text-ink-200">request.auth != null</span>.
                 </p>
               </div>
             )}
-
-            <div className="mt-3 grid gap-2.5">
-              {FIELDS.map((f) => (
-                <label key={f.key} className="block">
-                  <span className="flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-ink-400">
-                    {f.label}
-                    {f.required && <span className="text-amber-400">обязательно</span>}
-                  </span>
-                  <input
-                    value={cfg[f.key]}
-                    onChange={(e) => setCfg((c) => ({ ...c, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="mt-1 w-full rounded-lg border border-ink-500 bg-ink-750 px-3 py-2 font-mono text-xs text-ink-50 outline-none transition-colors placeholder:text-ink-500 focus:border-amber-400/70"
-                  />
-                </label>
-              ))}
-            </div>
-            {err && (
-              <p className="anim-msg-in mt-2 flex items-center gap-1.5 text-xs text-coral-500">
-                <Icon name="alert" size={13} /> {err}
-              </p>
-            )}
-          </div>
+          </>
         )}
-
-        <button
-          onClick={enter}
-          className="group mt-6 flex w-full items-center justify-center gap-2.5 rounded-xl bg-amber-400 py-3.5 font-display text-sm font-bold tracking-widest text-amber-950 uppercase shadow-lg shadow-amber-400/25 transition-all duration-200 hover:bg-amber-300 hover:shadow-amber-400/40 active:scale-[0.98]"
-        >
-          Выйти в эфир
-          <span className="transition-transform duration-200 group-hover:translate-x-1 group-hover:-translate-y-0.5">
-            <Icon name="send" size={17} strokeWidth={2.2} />
-          </span>
-        </button>
       </div>
     </div>
   );
