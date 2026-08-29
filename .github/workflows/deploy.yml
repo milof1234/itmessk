@@ -18,28 +18,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install
-        run: npm install
-
-      # --base=./ — относительные пути, чтобы сайт работал
-      # на username.github.io/repo-name/ (главная причина «пустой» страницы)
-      - name: Build
-        run: npx vite build --base=./
-
-      # фолбэк для прямых ссылок (SPA)
-      - name: SPA fallback
-        run: cp dist/index.html dist/404.html
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          cache: npm
+      - run: npm ci || npm install
+      # vite.config.js уже собирает весь сайт в один index.html (vite-plugin-singlefile)
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
@@ -50,6 +38,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
