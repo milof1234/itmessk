@@ -93,6 +93,10 @@ export function ChatWindow({ backend, profile, onBack, toast }: Props) {
   };
 
   const handleVoice = async (blob: Blob, meta: { duration?: number; size?: number }) => {
+    if (mutedNow) {
+      toast("Вы в муте — голосовое не уйдёт", "error");
+      return;
+    }
     try {
       await backend.sendMedia("voice", blob, meta);
     } catch {
@@ -230,6 +234,7 @@ export function ChatWindow({ backend, profile, onBack, toast }: Props) {
         onTyping={backend.setTyping}
         toast={toast}
         disabled={connecting || !room}
+        mutedUntil={profile.mutedUntil}
       />
 
       {/* ---------- лайтбокс ---------- */}
