@@ -73,6 +73,9 @@ export function ChatWindow({ backend, profile, onBack, toast }: Props) {
 
   /* роль и галочка отправителя (для бейджей у ника) */
   const senderInfo = (id: string): { role?: "creator" | "admin" | "user"; verified?: boolean } => {
+    if (id === backend.mySenderId) {
+      return { role: profile.role, verified: profile.verified };
+    }
     if (id === "efir-bot") return { verified: true };
     const u = backend.allUsers.find((x) => "u" + x.phone === id);
     return u ? { role: u.role, verified: u.verified } : {};

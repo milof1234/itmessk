@@ -46,9 +46,16 @@ export function MessageBubble({ msg, mine, first, last, onOpenImage, senderRole,
       </div>
 
       <div className={`flex max-w-[82%] flex-col sm:max-w-[68%] ${mine ? "items-end" : "items-start"}`}>
-        {first && !mine && (
-          <span className="mb-1 ml-1 flex items-center gap-1.5 text-xs font-semibold">
-            <span style={{ color: `hsl(${msg.senderHue} 70% 58%)` }}>{msg.senderName}</span>
+        {first && (
+          <span
+            className={`mb-1 flex items-center gap-1.5 text-xs font-semibold ${
+              mine ? "mr-1 justify-end" : "ml-1"
+            }`}
+          >
+            <span style={{ color: `hsl(${msg.senderHue} ${mine ? 60 : 70}% ${mine ? 50 : 58}%)` }}>
+              {msg.senderName}
+              {mine && <span className="opacity-60"> (вы)</span>}
+            </span>
             <RoleBadges role={senderRole} verified={senderVerified} size={11} />
           </span>
         )}

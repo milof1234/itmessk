@@ -311,8 +311,8 @@ export function useDemoChat(profile: Profile): ChatBackend {
     [botSay, pushMessage]
   );
 
-  /* демо-заглушки аккаунтов и модерации */
-  const demoUsers: UserDoc[] = [
+  /* ---------- демо-аккаунты и модерация (всё по-настоящему, локально) ---------- */
+  const [demoUsers, setDemoUsers] = useState<UserDoc[]>(() => [
     {
       phone: "79000000001",
       username: "demo_nastya",
@@ -331,20 +331,48 @@ export function useDemoChat(profile: Profile): ChatBackend {
       verified: false,
       createdAt: Date.now() - 43200_000,
     },
-  ];
+  ]);
 
-  const updateMyProfile = useCallback(async (_p: { name?: string; username?: string; hue?: number; theme?: ThemeName }) => {
-    /* в демо профиль меняется только локально */
+  /* мой демо-документ: в демо вы — креатор станции */
+  const [meDemo, setMeDemo] = useState<UserDoc>(() => ({
+    phone: "79990000000",
+    username: "demo_creator",
+    name: profile.name,
+    hue: profile.hue,
+    role: "creator",
+    verified: true,
+    createdAt: Date.now(),
+  }));
+
+  const updateMyProfile = useCallback(
+    async (p: { name?: string; username?: string; hue?: number; theme?: ThemeName }) => {
+      setMeDemo((cur) => ({ ...cur, ...p }));
+    },
+    []
+  );
+  const setRole = useCallback(async (phone: string, r: Role) => {
+    setDemoUsers((cur) => cur.map((u) => (u.phone === phone ? { ...u, role: r } : u)));
   }, []);
-  const setRole = useCallback(async (_p: string, _r: Role) => {}, []);
-  const setVerified = useCallback(async (_p: string, _v: boolean) => {}, []);
-  const muteUser = useCallback(async (_p: string, _u: number | null) => {}, []);
-  const resetUsers = useCallback(async () => 0, []);
+  const setVerified = useCallback(async (phone: string, v: boolean) => {
+    setDemoUsers((cur) => cur.map((u) => (u.phone === phone ? { ...u, verified: v } : u)));
+  }, []);
+  const muteUser = useCallback(async (phone: string, until: number | null) => {
+    setDemoUsers((cur) =>
+      cur.map((u) => (u.phone === phone ? { ...u, mutedUntil: until ?? undefined } : u))
+    );
+  }, []);
+  const resetUsers = useCallback(async () => {
+    const n = demoUsersRef.current.length;
+    setDemoUsers([]);
+    return n;
+  }, []);
+  const demoUsersRef = useRef<UserDoc[]>(demoUsers);
+  demoUsersRef.current = demoUsers;
   const searchUsers = useCallback(async (q: string) => {
     const s = q.trim().toLowerCase();
     if (!s) return [];
     const digits = s.replace(/\D/g, "");
-    return demoUsers.filter(
+    return demoUsersRef.current.filter(
       (u) =>
         (digits.length >= 3 && u.phone.includes(digits)) ||
         u.username.includes(s.replace(/^@/, "")) ||
@@ -379,8 +407,8 @@ export function useDemoChat(profile: Profile): ChatBackend {
     activeRoomId,
     messages,
     presence,
-    meDoc: null,
-    allUsers: demoUsers,
+    meDoc: meDemo,
+    allUsers: [meDemo, ...demoUsers],
     selectRoom,
     createRoom,
     createGroup,
