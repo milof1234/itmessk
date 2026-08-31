@@ -118,10 +118,16 @@
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
     #file-input, #avatar-input { display: none; }
 
-    #bg-mute-btn { position: fixed; bottom: 20px; left: 20px; width: 50px; height: 50px; border-radius: 50%; background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-main); cursor: pointer; display: none; z-index: 50; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: 0.2s; }
-    #bg-mute-btn:hover { transform: scale(1.1); }
-    #bg-mute-btn.pulsing { animation: radio-pulse 1s infinite; border-color: var(--accent); color: var(--accent); }
-    @keyframes radio-pulse { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+    /* ПАНЕЛЬ И ПЛЕЕР РАДИО */
+    #radio-bar { position: fixed; bottom: 15px; left: 15px; background: var(--bg-panel); border: 1px solid var(--accent); border-radius: 12px; padding: 8px 12px; display: none; align-items: center; gap: 10px; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: 0.3s; cursor: pointer; }
+    #radio-bar.playing { border-color: var(--accent); box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
+    .radio-icon { font-size: 20px; color: var(--accent); }
+    .radio-text { font-size: 13px; font-weight: 600; color: var(--text-main); }
+    .radio-pulsing-icon { animation: radio-pulse 1s infinite; }
+    @keyframes radio-pulse { 0% { opacity: 0.5; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0.5; transform: scale(0.9); } }
+    
+    #bg-media-container { position: fixed; bottom: 65px; left: 15px; width: 300px; height: 170px; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); z-index: 50; display: none; background: #000; }
+    #bg-media-container iframe, #bg-media-container audio { width: 100%; height: 100%; border: none; }
 
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
     .modal-content { background: var(--bg-sidebar); border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); border: 1px solid var(--border); max-height: 80vh; display: flex; flex-direction: column; }
@@ -156,6 +162,8 @@
       #main-content.mobile-chat-open .chat-area { transform: translateX(0); }
       .back-btn { display: flex; }
       .message { max-width: 85%; }
+      #radio-bar { bottom: 10px; left: 10px; padding: 6px 10px; }
+      #bg-media-container { bottom: 50px; left: 10px; width: 200px; height: 120px; }
     }
   </style>
 </head>
@@ -251,8 +259,12 @@
     </div>
   </div>
 
-  <div id="bg-media-container" style="position: fixed; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></div>
-  <button id="bg-mute-btn" title="Включить звук">🔊</button>
+  <!-- Плеер и Кнопка Радио -->
+  <div id="bg-media-container"></div>
+  <div id="radio-bar">
+    <span class="radio-icon radio-pulsing-icon" id="radio-icon-btn">🔊</span>
+    <span class="radio-text" id="radio-text-btn">Включить звук</span>
+  </div>
 
   <div id="creator-modal" class="modal-overlay">
     <div class="modal-content">
@@ -260,19 +272,16 @@
         <h3>👑 Управление</h3>
         <button class="close-modal" id="close-admin-modal">✕</button>
       </div>
-      
       <div class="settings-section">
         <div class="settings-title">Радио (Фоновый звук)</div>
         <input type="text" id="bg-sound-url" class="input-text" placeholder="Вставьте ссылку (YouTube, Spotify, MP3)">
         <button class="btn-launch-radio" id="btn-launch-radio">▶ Запустить радио</button>
         <button class="btn-adm btn-del" id="btn-stop-bg" style="width:100%; padding:10px;">⏹ Остановить у всех</button>
       </div>
-
       <div class="settings-section">
         <div class="settings-title">База пользователей</div>
         <button class="btn-wipe-all" id="btn-wipe-db">🔥 Снести всю базу</button>
       </div>
-
       <div id="user-list-admin"></div>
     </div>
   </div>
@@ -417,7 +426,8 @@
       } else {
         document.getElementById('auth-screen').style.display = 'flex';
         document.getElementById('app-container').style.display = 'none';
-        document.getElementById('bg-mute-btn').style.display = 'none';
+        document.getElementById('radio-bar').style.display = 'none';
+        document.getElementById('bg-media-container').style.display = 'none';
       }
     });
 
@@ -427,7 +437,7 @@
       let ytMatch = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
       if (ytMatch) {
         const id = ytMatch[1];
-        return { type: 'youtube', src: `https://www.youtube.com/embed/${id}?autoplay=1&loop=1&playlist=${id}&controls=0` };
+        return { type: 'youtube', src: `https://www.youtube.com/embed/${id}?autoplay=1&loop=1&playlist=${id}&controls=1` };
       }
       if (url.includes('open.spotify.com/')) {
         const path = url.split('open.spotify.com/')[1].split('?')[0];
@@ -437,55 +447,87 @@
     }
 
     let currentBgMedia = null;
+    let isRadioPlaying = false;
 
     function listenToBgSound() {
       db.collection('settings').doc('radio').onSnapshot((doc) => {
         const data = doc.data();
-        const muteBtn = document.getElementById('bg-mute-btn');
+        const radioBar = document.getElementById('radio-bar');
         const container = document.getElementById('bg-media-container');
         
         if (data && data.url) {
           currentBgMedia = parseMediaUrl(data.url);
-          muteBtn.style.display = 'flex';
-          muteBtn.classList.add('pulsing');
-          muteBtn.innerText = '🔊';
+          radioBar.style.display = 'flex';
           container.innerHTML = '';
+          container.style.display = 'none';
+          isRadioPlaying = false;
+          updateRadioUI(false);
         } else {
           currentBgMedia = null;
           container.innerHTML = '';
-          muteBtn.style.display = 'none';
+          container.style.display = 'none';
+          radioBar.style.display = 'none';
+          isRadioPlaying = false;
         }
       });
     }
 
-    document.getElementById('bg-mute-btn').addEventListener('click', () => {
-      const muteBtn = document.getElementById('bg-mute-btn');
+    function updateRadioUI(isPlaying) {
+      const icon = document.getElementById('radio-icon-btn');
+      const text = document.getElementById('radio-text-btn');
+      const bar = document.getElementById('radio-bar');
+      if (isPlaying) {
+        icon.innerText = '🔇';
+        text.innerText = 'Выключить звук';
+        icon.classList.remove('radio-pulsing-icon');
+        bar.classList.add('playing');
+      } else {
+        icon.innerText = '🔊';
+        text.innerText = 'Включить звук';
+        icon.classList.add('radio-pulsing-icon');
+        bar.classList.remove('playing');
+      }
+    }
+
+    function toggleRadio() {
       const container = document.getElementById('bg-media-container');
-      
       if (!currentBgMedia) return;
 
-      if (muteBtn.classList.contains('pulsing') || muteBtn.innerText === '🔊') {
-        if (currentBgMedia.type === 'youtube' || currentBgMedia.type === 'spotify') {
-          container.innerHTML = `<iframe src="${currentBgMedia.src}" allow="autoplay; encrypted-media" style="width:1px; height:1px;"></iframe>`;
+      if (!isRadioPlaying) {
+        let embedHtml = '';
+        if (currentBgMedia.type === 'youtube') {
+          embedHtml = `<iframe src="${currentBgMedia.src}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+        } else if (currentBgMedia.type === 'spotify') {
+          embedHtml = `<iframe src="${currentBgMedia.src}" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
         } else {
-          container.innerHTML = `<audio src="${currentBgMedia.src}" autoplay loop></audio>`;
+          embedHtml = `<audio src="${currentBgMedia.src}" autoplay loop controls></audio>`;
         }
-        muteBtn.classList.remove('pulsing');
-        muteBtn.innerText = '🔇';
+        container.innerHTML = embedHtml;
+        container.style.display = 'block';
+        isRadioPlaying = true;
+        updateRadioUI(true);
       } else {
         container.innerHTML = '';
-        muteBtn.innerText = '🔊';
-        muteBtn.classList.add('pulsing');
+        container.style.display = 'none';
+        isRadioPlaying = false;
+        updateRadioUI(false);
       }
-    });
+    }
+
+    document.getElementById('radio-bar').addEventListener('click', toggleRadio);
 
     document.getElementById('btn-launch-radio').addEventListener('click', async () => {
       const url = document.getElementById('bg-sound-url').value.trim();
       if (!url) return alert("Вставьте ссылку!");
       try {
         await db.collection('settings').doc('radio').set({ url: url });
-        alert("Радио запущено! У пользователей появится мигающая кнопка для включения.");
+        alert("Радио запущено! У всех появится панель для включения звука.");
         document.getElementById('bg-sound-url').value = '';
+        
+        // Автоматически включаем радио у Создателя
+        setTimeout(() => {
+          if (!isRadioPlaying) toggleRadio();
+        }, 1000);
       } catch (err) {
         alert("Ошибка: " + err.message);
       }
